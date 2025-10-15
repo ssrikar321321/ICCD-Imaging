@@ -73,6 +73,10 @@ st.markdown("""
         border-radius: 0.5rem;
         border: 1px solid rgba(255, 255, 255, 0.1);
     }
+    .stAlert {
+        background: rgba(34, 197, 94, 0.1);
+        border-left: 4px solid #22c55e;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -149,20 +153,7 @@ def adjust_image(image_array, brightness, contrast):
     img = np.clip(img, 0, 255)
     return img.astype(np.uint8)
 
-def background_subtraction(measurement, background):
-    """Subtract background from measurement image"""
-    measurement_array = np.array(measurement.convert('L')).astype(np.int16)
-    background_array = np.array(background.convert('L')).astype(np.int16)
-    
-    # Ensure same size
-    if measurement_array.shape != background_array.shape:
-        background = background.resize(measurement.size)
-        background_array = np.array(background.convert('L')).astype(np.int16)
-    
-    subtracted = np.clip(measurement_array - background_array, 0, 255).astype(np.uint8)
-    return subtracted
-
-def enhance_contrast_clahe(image_array, clip_limit=0.005):
+def enhance_contrast_clahe(image_array, clip_limit=0.03):
     """Apply Contrast Limited Adaptive Histogram Equalization (CLAHE)"""
     if image_array.max() > 1:
         image_array = image_array / 255.0
@@ -186,7 +177,7 @@ def process_image(img, background_img, settings):
     
     # Apply crop if specified
     if settings.get('crop_coords'):
-        x1, y1, x2, y2 = settings['crop_coords']
+        y1, y2, x1, x2 = settings['crop_coords']
         img_array = img_array[y1:y2, x1:x2]
     
     # Background subtraction
@@ -198,9 +189,9 @@ def process_image(img, background_img, settings):
         if img_array.shape == bg_array.shape:
             img_array = np.clip(img_array.astype(np.int16) - bg_array.astype(np.int16), 0, 255).astype(np.uint8)
     
-    # CLAHE enhancement
+    # CLAHE enhancement - IMPORTANT for dark ICCD images
     if settings.get('use_clahe', False):
-        img_array = enhance_contrast_clahe(img_array, settings.get('clahe_clip_limit', 0.005))
+        img_array = enhance_contrast_clahe(img_array, settings.get('clahe_clip_limit', 0.03))
     
     # Gaussian smoothing
     if settings.get('use_smoothing', False):
@@ -225,6 +216,10 @@ if 'processed_images' not in st.session_state:
     st.session_state.processed_images = []
 if 'background_image' not in st.session_state:
     st.session_state.background_image = None
+if 'crop_coords' not in st.session_state:
+    st.session_state.crop_coords = None
+if 'show_crop_help' not in st.session_state:
+    st.session_state.show_crop_help = True
 
 # Header
 st.markdown("""
@@ -243,14 +238,16 @@ with st.sidebar:
         "📤 Upload ICCD Images",
         type=['png', 'jpg', 'jpeg', 'tiff', 'bmp'],
         accept_multiple_files=True,
-        key="file_uploader"
+        key="file_uploader",
+        help="Upload your dark ICCD measurement images"
     )
     
     # Background image upload
     background_file = st.file_uploader(
         "🖼️ Upload Background Image (Optional)",
         type=['png', 'jpg', 'jpeg', 'tiff', 'bmp'],
-        key="bg_uploader"
+        key="bg_uploader",
+        help="Background image for noise subtraction"
     )
     
     if background_file:
@@ -259,8 +256,46 @@ with st.sidebar:
     
     st.divider()
     
+    # Crop Settings
+    with st.expander("✂️ Crop Settings", expanded=False):
+        st.info("Define crop region to focus on area of interest and speed up processing")
+        
+        if st.session_state.uploaded_images:
+            first_img = st.session_state.uploaded_images[0]['image']
+            img_width, img_height = first_img.size
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                crop_top = st.number_input("Top (Y)", 0, img_height, 0, 10)
+                crop_left = st.number_input("Left (X)", 0, img_width, 0, 10)
+            with col2:
+                crop_bottom = st.number_input("Bottom (Y)", 0, img_height, img_height, 10)
+                crop_right = st.number_input("Right (X)", 0, img_width, img_width, 10)
+            
+            if st.button("✅ Apply Crop to All", use_container_width=True):
+                if crop_bottom > crop_top and crop_right > crop_left:
+                    st.session_state.crop_coords = (crop_top, crop_bottom, crop_left, crop_right)
+                    st.success(f"Crop applied: {crop_right-crop_left}×{crop_bottom-crop_top} px")
+                else:
+                    st.error("Invalid crop coordinates!")
+            
+            if st.button("🔄 Reset Crop", use_container_width=True):
+                st.session_state.crop_coords = None
+                st.success("Crop reset!")
+            
+            if st.session_state.crop_coords:
+                y1, y2, x1, x2 = st.session_state.crop_coords
+                st.success(f"✂️ Active crop: {x2-x1}×{y2-y1} px")
+        else:
+            st.warning("Upload images first to enable cropping")
+    
+    st.divider()
+    
     # Advanced Processing
     with st.expander("🔧 Advanced Processing", expanded=True):
+        st.markdown("### 💡 For Dark ICCD Images:")
+        st.info("Enable CLAHE + increase brightness (140-160) to see faint signals!")
+        
         use_bg_subtraction = st.checkbox(
             "Background Subtraction",
             value=False,
@@ -270,21 +305,22 @@ with st.sidebar:
         
         use_clahe = st.checkbox(
             "CLAHE Enhancement",
-            value=False,
-            help="Contrast Limited Adaptive Histogram Equalization"
+            value=True,  # Default ON for ICCD
+            help="⚡ ESSENTIAL for dark ICCD images - enhances contrast"
         )
         
         if use_clahe:
             clahe_clip_limit = st.slider(
                 "CLAHE Clip Limit",
                 min_value=0.001,
-                max_value=0.050,
-                value=0.005,
+                max_value=0.100,
+                value=0.030,  # Higher default for ICCD
                 step=0.001,
-                format="%.3f"
+                format="%.3f",
+                help="Higher = more enhancement (try 0.03-0.05 for ICCD)"
             )
         else:
-            clahe_clip_limit = 0.005
+            clahe_clip_limit = 0.030
         
         use_threshold = st.checkbox(
             "Thresholding",
@@ -326,13 +362,22 @@ with st.sidebar:
     # Basic Processing
     colormap = st.selectbox(
         "🎨 Colormap",
-        options=['jet', 'inferno', 'hot', 'viridis'],
+        options=['inferno', 'jet', 'hot', 'viridis'],
         index=0,
-        format_func=lambda x: x.capitalize() + (' (Thermal)' if x == 'jet' else ' (Plasma)' if x == 'inferno' else '')
+        format_func=lambda x: x.capitalize() + (' (Plasma)' if x == 'inferno' else ' (Thermal)' if x == 'jet' else '')
     )
     
-    brightness = st.slider("💡 Brightness", 0, 200, 100, help="100 = original")
-    contrast = st.slider("🔆 Contrast", 0, 200, 100, help="100 = original")
+    brightness = st.slider(
+        "💡 Brightness", 
+        0, 200, 150,  # Default 150 for dark ICCD
+        help="Increase to 140-160 for dark ICCD images"
+    )
+    
+    contrast = st.slider(
+        "🔆 Contrast", 
+        0, 200, 120,  # Default 120 for ICCD
+        help="Increase to 120-140 for better visibility"
+    )
     
     st.divider()
     
@@ -347,6 +392,21 @@ with st.sidebar:
         st.session_state.uploaded_images = []
         st.session_state.processed_images = []
         st.session_state.background_image = None
+        st.session_state.crop_coords = None
+        st.rerun()
+
+# Help message for dark images
+if st.session_state.uploaded_images and st.session_state.show_crop_help:
+    st.info("""
+    **🔍 Can't see your jets?** Try these settings:
+    - ✅ Enable **CLAHE Enhancement** (already on)
+    - 🔆 Increase **Brightness** to 140-160
+    - 📈 Increase **Contrast** to 120-140
+    - 🎨 Try **Inferno** colormap (works great for plasma)
+    - ✂️ Use **Crop** to focus on jet region
+    """)
+    if st.button("Got it! Don't show again"):
+        st.session_state.show_crop_help = False
         st.rerun()
 
 # Process uploaded files
@@ -373,7 +433,8 @@ if st.session_state.uploaded_images:
         'use_threshold': use_threshold,
         'threshold_value': threshold_value,
         'use_smoothing': use_smoothing,
-        'gaussian_sigma': gaussian_sigma
+        'gaussian_sigma': gaussian_sigma,
+        'crop_coords': st.session_state.crop_coords
     }
     
     st.session_state.processed_images = []
@@ -420,18 +481,19 @@ if st.session_state.processed_images:
         """, unsafe_allow_html=True)
     
     with col4:
+        crop_status = "✂️" if st.session_state.crop_coords else "⬜"
         st.markdown(f"""
         <div class="metric-card">
-            <div class="metric-value">{colormap.capitalize()}</div>
-            <div class="metric-label">Colormap</div>
+            <div class="metric-value">{crop_status}</div>
+            <div class="metric-label">Cropped</div>
         </div>
         """, unsafe_allow_html=True)
     
     with col5:
         st.markdown(f"""
         <div class="metric-card">
-            <div class="metric-value">{grid_cols}</div>
-            <div class="metric-label">Columns</div>
+            <div class="metric-value">{colormap.capitalize()}</div>
+            <div class="metric-label">Colormap</div>
         </div>
         """, unsafe_allow_html=True)
     
