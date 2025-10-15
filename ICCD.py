@@ -287,7 +287,7 @@ if uploaded_files:
             st.session_state.uploaded_images.append({
                 'name': file.name,
                 'image': img,
-                'timestamp': f"Time = {i * 20 + 58} ns"
+                'timestamp': f"Time = {i * 20 + 25} ns"
             })
 
 # Process images
