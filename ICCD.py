@@ -1,6 +1,6 @@
 import streamlit as st
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 import io
 from scipy.ndimage import gaussian_filter
 from skimage import exposure
@@ -70,6 +70,44 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
+
+def add_timestamp_overlay(image: Image.Image, text: str) -> Image.Image:
+    """Return a copy of the image with the timestamp text rendered on top."""
+
+    if not text:
+        return image
+
+    base = image.convert("RGBA")
+    overlay = Image.new("RGBA", base.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+
+    # Try to load a truetype font for better scaling, fall back to default otherwise
+    font_size = max(12, base.width // 20)
+    try:
+        font = ImageFont.truetype("DejaVuSans-Bold.ttf", font_size)
+    except OSError:
+        font = ImageFont.load_default()
+
+    text_bbox = draw.textbbox((0, 0), text, font=font)
+    text_width = text_bbox[2] - text_bbox[0]
+    text_height = text_bbox[3] - text_bbox[1]
+
+    padding = max(8, font_size // 4)
+    x = padding
+    y = base.height - text_height - padding
+    rectangle_coords = [
+        x - padding,
+        y - padding,
+        x + text_width + padding,
+        y + text_height + padding,
+    ]
+
+    draw.rectangle(rectangle_coords, fill=(0, 0, 0, 160))
+    draw.text((x, y), text, fill=(255, 255, 255, 255), font=font)
+
+    combined = Image.alpha_composite(base, overlay)
+    return combined.convert("RGB")
+
 
 def process_iccd_image(img, background_img, settings):
     """Process ICCD image - SIMPLIFIED AND FIXED"""
@@ -151,6 +189,12 @@ if 'background_image' not in st.session_state:
     st.session_state.background_image = None
 if 'crop_coords' not in st.session_state:
     st.session_state.crop_coords = None
+if 'time_settings' not in st.session_state:
+    st.session_state.time_settings = {
+        'start_time': 25.0,
+        'interval': 25.0,
+        'unit': 'µs'
+    }
 
 # Header
 st.markdown("""
@@ -264,9 +308,45 @@ with st.sidebar:
     
     st.divider()
     
+    # Time label settings
+    st.subheader("⏱️ Time Labels")
+    col_time_1, col_time_2 = st.columns(2)
+    with col_time_1:
+        start_time = st.number_input(
+            "Start Time",
+            min_value=0.0,
+            value=float(st.session_state.time_settings.get('start_time', 25.0)),
+            step=1.0,
+            format="%.3f"
+        )
+    with col_time_2:
+        time_interval = st.number_input(
+            "Interval",
+            min_value=0.0,
+            value=float(st.session_state.time_settings.get('interval', 25.0)),
+            step=1.0,
+            format="%.3f"
+        )
+
+    time_units = ["ns", "µs", "ms", "s"]
+    default_unit = st.session_state.time_settings.get('unit', 'µs')
+    try:
+        default_index = time_units.index(default_unit)
+    except ValueError:
+        default_index = 1
+    time_unit = st.selectbox("Time Unit", options=time_units, index=default_index)
+
+    st.session_state.time_settings = {
+        'start_time': start_time,
+        'interval': time_interval,
+        'unit': time_unit
+    }
+
+    st.divider()
+
     # Layout
     grid_cols = st.selectbox("📐 Grid Columns", [2, 3, 4, 5], index=2)
-    show_labels = st.checkbox("🏷️ Show Time Labels", value=True)
+    show_labels = st.checkbox("🏷️ Overlay Time Labels", value=True)
     
     st.divider()
     
@@ -282,13 +362,19 @@ with st.sidebar:
 if uploaded_files:
     if len(uploaded_files) != len(st.session_state.uploaded_images):
         st.session_state.uploaded_images = []
-        for i, file in enumerate(uploaded_files):
+        for file in uploaded_files:
+            file.seek(0)
             img = Image.open(file)
             st.session_state.uploaded_images.append({
                 'name': file.name,
                 'image': img,
-                'timestamp': f"Time = {i * 25 + 25} us"
+                'timestamp': ""
             })
+
+    for idx, img_data in enumerate(st.session_state.uploaded_images):
+        timestamp_value = st.session_state.time_settings['start_time'] + idx * st.session_state.time_settings['interval']
+        timestamp_text = f"Time = {timestamp_value:g} {st.session_state.time_settings['unit']}"
+        img_data['timestamp'] = timestamp_text
 
 # Process images
 if st.session_state.uploaded_images:
@@ -319,9 +405,11 @@ if st.session_state.uploaded_images:
                     st.session_state.background_image,
                     settings
                 )
+                overlay_image = add_timestamp_overlay(processed, img_data['timestamp'])
                 st.session_state.processed_images.append({
                     'name': img_data['name'],
                     'image': processed,
+                    'overlay_image': overlay_image,
                     'timestamp': img_data['timestamp']
                 })
             except Exception as e:
@@ -378,13 +466,14 @@ if st.session_state.processed_images:
                 with cols[col_idx]:
                     img_data = st.session_state.processed_images[img_idx]
                     
-                    # Display image
-                    caption = img_data['timestamp'] if show_labels else None
-                    st.image(img_data['image'], caption=caption, use_container_width=True)
-                    
+                    # Display image with optional overlay
+                    display_image = img_data['overlay_image'] if show_labels else img_data['image']
+                    st.image(display_image, use_container_width=True)
+
                     # Download button
                     buffered = io.BytesIO()
-                    img_data['image'].save(buffered, format="PNG")
+                    download_image = display_image if show_labels else img_data['image']
+                    download_image.save(buffered, format="PNG")
                     st.download_button(
                         label="⬇️ Download",
                         data=buffered.getvalue(),
