@@ -1,0 +1,574 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { Upload, Download, Trash2, Grid3x3, Settings, Crop, RotateCcw } from 'lucide-react';
+
+const ICCDDashboard = () => {
+  const [images, setImages] = useState([]);
+  const [colormap, setColormap] = useState('jet');
+  const [brightness, setBrightness] = useState(100);
+  const [contrast, setContrast] = useState(100);
+  const [gridCols, setGridCols] = useState(4);
+  const [showLabels, setShowLabels] = useState(true);
+  const [cropMode, setCropMode] = useState(false);
+  const [cropArea, setCropArea] = useState(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState(null);
+  const [selectedImageForCrop, setSelectedImageForCrop] = useState(null);
+  const canvasRefs = useRef([]);
+  const cropCanvasRef = useRef(null);
+
+  const colormaps = {
+    jet: [
+      [0, 0, 143], [0, 0, 159], [0, 0, 175], [0, 0, 191], [0, 0, 207],
+      [0, 0, 223], [0, 0, 239], [0, 0, 255], [0, 16, 255], [0, 32, 255],
+      [0, 48, 255], [0, 64, 255], [0, 80, 255], [0, 96, 255], [0, 112, 255],
+      [0, 128, 255], [0, 143, 255], [0, 159, 255], [0, 175, 255], [0, 191, 255],
+      [0, 207, 255], [0, 223, 255], [0, 239, 255], [0, 255, 255], [16, 255, 239],
+      [32, 255, 223], [48, 255, 207], [64, 255, 191], [80, 255, 175], [96, 255, 159],
+      [112, 255, 143], [128, 255, 128], [143, 255, 112], [159, 255, 96], [175, 255, 80],
+      [191, 255, 64], [207, 255, 48], [223, 255, 32], [239, 255, 16], [255, 255, 0],
+      [255, 239, 0], [255, 223, 0], [255, 207, 0], [255, 191, 0], [255, 175, 0],
+      [255, 159, 0], [255, 143, 0], [255, 128, 0], [255, 112, 0], [255, 96, 0],
+      [255, 80, 0], [255, 64, 0], [255, 48, 0], [255, 32, 0], [255, 16, 0],
+      [255, 0, 0], [239, 0, 0], [223, 0, 0], [207, 0, 0], [191, 0, 0],
+      [175, 0, 0], [159, 0, 0], [143, 0, 0], [128, 0, 0]
+    ],
+    hot: [
+      [0, 0, 0], [11, 0, 0], [21, 0, 0], [32, 0, 0], [43, 0, 0],
+      [53, 0, 0], [64, 0, 0], [74, 0, 0], [85, 0, 0], [96, 0, 0],
+      [106, 0, 0], [117, 0, 0], [128, 0, 0], [138, 0, 0], [149, 0, 0],
+      [159, 0, 0], [170, 0, 0], [181, 0, 0], [191, 0, 0], [202, 0, 0],
+      [213, 0, 0], [223, 0, 0], [234, 0, 0], [244, 0, 0], [255, 0, 0],
+      [255, 11, 0], [255, 21, 0], [255, 32, 0], [255, 43, 0], [255, 53, 0],
+      [255, 64, 0], [255, 74, 0], [255, 85, 0], [255, 96, 0], [255, 106, 0],
+      [255, 117, 0], [255, 128, 0], [255, 138, 0], [255, 149, 0], [255, 159, 0],
+      [255, 170, 0], [255, 181, 0], [255, 191, 0], [255, 202, 0], [255, 213, 0],
+      [255, 223, 0], [255, 234, 0], [255, 244, 0], [255, 255, 0], [255, 255, 16],
+      [255, 255, 32], [255, 255, 48], [255, 255, 64], [255, 255, 80], [255, 255, 96],
+      [255, 255, 112], [255, 255, 128], [255, 255, 143], [255, 255, 159], [255, 255, 175],
+      [255, 255, 191], [255, 255, 207], [255, 255, 223], [255, 255, 239], [255, 255, 255]
+    ],
+    viridis: [
+      [68, 1, 84], [68, 2, 86], [69, 4, 87], [69, 5, 89], [70, 7, 90],
+      [70, 8, 92], [70, 10, 93], [70, 11, 94], [71, 13, 96], [71, 14, 97],
+      [71, 16, 99], [71, 17, 100], [71, 19, 101], [72, 20, 103], [72, 22, 104],
+      [72, 23, 105], [72, 24, 106], [72, 26, 108], [72, 27, 109], [72, 28, 110],
+      [72, 29, 111], [72, 31, 112], [72, 32, 113], [72, 33, 115], [72, 35, 116],
+      [72, 36, 117], [72, 37, 118], [72, 38, 119], [72, 40, 120], [72, 41, 121],
+      [71, 42, 122], [71, 44, 122], [71, 45, 123], [71, 46, 124], [71, 47, 125],
+      [70, 48, 126], [70, 50, 126], [70, 51, 127], [70, 52, 128], [69, 53, 129],
+      [69, 55, 129], [69, 56, 130], [68, 57, 131], [68, 58, 131], [68, 59, 132],
+      [67, 61, 132], [67, 62, 133], [66, 63, 133], [66, 64, 134], [66, 65, 134],
+      [65, 66, 135], [65, 68, 135], [64, 69, 136], [64, 70, 136], [63, 71, 136],
+      [63, 72, 137], [62, 73, 137], [62, 74, 137], [62, 76, 138], [61, 77, 138],
+      [61, 78, 138], [60, 79, 138], [60, 80, 139], [59, 81, 139], [59, 82, 139],
+      [58, 83, 139], [58, 84, 140], [57, 85, 140], [57, 86, 140], [56, 88, 140],
+      [56, 89, 140], [55, 90, 140], [55, 91, 141], [54, 92, 141], [54, 93, 141],
+      [53, 94, 141], [53, 95, 141], [52, 96, 141], [52, 97, 141], [51, 98, 141],
+      [51, 99, 141], [50, 100, 142], [50, 101, 142], [49, 102, 142], [49, 103, 142],
+      [49, 104, 142], [48, 105, 142], [48, 106, 142], [47, 107, 142], [47, 108, 142],
+      [46, 109, 142], [46, 110, 142], [46, 111, 142], [45, 112, 142], [45, 113, 142],
+      [44, 113, 142], [44, 114, 142], [44, 115, 142], [43, 116, 142], [43, 117, 142],
+      [42, 118, 142], [42, 119, 142], [42, 120, 142], [41, 121, 142], [41, 122, 142],
+      [41, 123, 142], [40, 124, 142], [40, 125, 142], [39, 126, 142], [39, 127, 142],
+      [39, 128, 142], [38, 129, 142], [38, 130, 142], [38, 130, 142], [37, 131, 142],
+      [37, 132, 142], [37, 133, 142], [36, 134, 142], [36, 135, 142], [35, 136, 142],
+      [35, 137, 142], [35, 138, 141], [34, 139, 141], [34, 140, 141], [34, 141, 141],
+      [33, 142, 141], [33, 143, 141], [33, 144, 141], [33, 145, 140], [32, 146, 140],
+      [32, 146, 140], [32, 147, 140], [31, 148, 140], [31, 149, 139], [31, 150, 139],
+      [31, 151, 139], [31, 152, 139], [31, 153, 138], [31, 154, 138], [30, 155, 138],
+      [30, 156, 137], [30, 157, 137], [31, 158, 137], [31, 159, 136], [31, 160, 136],
+      [31, 161, 136], [31, 161, 135], [31, 162, 135], [32, 163, 134], [32, 164, 134],
+      [33, 165, 133], [33, 166, 133], [34, 167, 133], [34, 168, 132], [35, 169, 131],
+      [36, 170, 131], [37, 171, 130], [37, 172, 130], [38, 173, 129], [39, 173, 129],
+      [40, 174, 128], [41, 175, 127], [42, 176, 127], [44, 177, 126], [45, 178, 125],
+      [46, 179, 124], [47, 180, 124], [49, 181, 123], [50, 182, 122], [52, 182, 121],
+      [53, 183, 121], [55, 184, 120], [56, 185, 119], [58, 186, 118], [59, 187, 117],
+      [61, 188, 116], [63, 188, 115], [64, 189, 114], [66, 190, 113], [68, 191, 112],
+      [70, 192, 111], [72, 193, 110], [74, 193, 109], [76, 194, 108], [78, 195, 107],
+      [80, 196, 106], [82, 197, 105], [84, 197, 104], [86, 198, 103], [88, 199, 101],
+      [90, 200, 100], [92, 200, 99], [94, 201, 98], [96, 202, 96], [99, 203, 95],
+      [101, 203, 94], [103, 204, 92], [105, 205, 91], [108, 205, 90], [110, 206, 88],
+      [112, 207, 87], [115, 208, 86], [117, 208, 84], [119, 209, 83], [122, 209, 81],
+      [124, 210, 80], [127, 211, 78], [129, 211, 77], [132, 212, 75], [134, 213, 73],
+      [137, 213, 72], [139, 214, 70], [142, 214, 69], [144, 215, 67], [147, 215, 65],
+      [149, 216, 64], [152, 216, 62], [155, 217, 60], [157, 217, 59], [160, 218, 57],
+      [162, 218, 55], [165, 219, 54], [168, 219, 52], [170, 220, 50], [173, 220, 48],
+      [176, 221, 47], [178, 221, 45], [181, 222, 43], [184, 222, 41], [186, 222, 40],
+      [189, 223, 38], [192, 223, 37], [194, 223, 35], [197, 224, 33], [200, 224, 32],
+      [202, 225, 31], [205, 225, 29], [208, 225, 28], [210, 226, 27], [213, 226, 26],
+      [216, 226, 25], [218, 227, 25], [221, 227, 24], [223, 227, 24], [226, 228, 24],
+      [229, 228, 25], [231, 228, 25], [234, 229, 26], [236, 229, 27], [239, 229, 28],
+      [241, 229, 29], [244, 230, 30], [246, 230, 32], [248, 230, 33], [251, 231, 35],
+      [253, 231, 37]
+    ]
+  };
+
+  const applyColormap = (imageData, cmap) => {
+    const data = imageData.data;
+    const colorArray = colormaps[cmap];
+    
+    for (let i = 0; i < data.length; i += 4) {
+      const gray = data[i];
+      const index = Math.floor((gray / 255) * (colorArray.length - 1));
+      const color = colorArray[index];
+      
+      data[i] = color[0];
+      data[i + 1] = color[1];
+      data[i + 2] = color[2];
+    }
+    
+    return imageData;
+  };
+
+  const adjustImage = (imageData, bright, cont) => {
+    const data = imageData.data;
+    const factor = (259 * (cont + 255)) / (255 * (259 - cont));
+    
+    for (let i = 0; i < data.length; i += 4) {
+      data[i] = Math.min(255, Math.max(0, factor * (data[i] - 128) + 128 + bright));
+      data[i + 1] = Math.min(255, Math.max(0, factor * (data[i + 1] - 128) + 128 + bright));
+      data[i + 2] = Math.min(255, Math.max(0, factor * (data[i + 2] - 128) + 128 + bright));
+    }
+    
+    return imageData;
+  };
+
+  const processImage = (canvas, img, index, crop = null) => {
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    const useCrop = crop || images[index]?.cropArea;
+    
+    if (useCrop) {
+      canvas.width = useCrop.width;
+      canvas.height = useCrop.height;
+      ctx.drawImage(img, useCrop.x, useCrop.y, useCrop.width, useCrop.height, 0, 0, useCrop.width, useCrop.height);
+    } else {
+      canvas.width = img.width;
+      canvas.height = img.height;
+      ctx.drawImage(img, 0, 0);
+    }
+    
+    let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    imageData = adjustImage(imageData, brightness - 100, contrast - 100);
+    imageData = applyColormap(imageData, colormap);
+    ctx.putImageData(imageData, 0, 0);
+  };
+
+  useEffect(() => {
+    images.forEach((img, index) => {
+      if (canvasRefs.current[index] && img.element) {
+        processImage(canvasRefs.current[index], img.element, index);
+      }
+    });
+  }, [colormap, brightness, contrast, images]);
+
+  const handleFileUpload = (e) => {
+    const files = Array.from(e.target.files);
+    
+    files.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          setImages(prev => [...prev, {
+            name: file.name,
+            element: img,
+            timestamp: `Time = ${prev.length * 20 + 58} ns`,
+            cropArea: null
+          }]);
+        };
+        img.src = event.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const startCropMode = (index) => {
+    setSelectedImageForCrop(index);
+    setCropMode(true);
+    setCropArea(images[index]?.cropArea || null);
+  };
+
+  const handleMouseDown = (e) => {
+    if (!cropMode) return;
+    const rect = cropCanvasRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const scaleX = images[selectedImageForCrop].element.width / rect.width;
+    const scaleY = images[selectedImageForCrop].element.height / rect.height;
+    
+    setIsDragging(true);
+    setDragStart({ x: x * scaleX, y: y * scaleY });
+  };
+
+  const handleMouseMove = (e) => {
+    if (!cropMode || !isDragging || !dragStart) return;
+    const rect = cropCanvasRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const scaleX = images[selectedImageForCrop].element.width / rect.width;
+    const scaleY = images[selectedImageForCrop].element.height / rect.height;
+    
+    const currentX = x * scaleX;
+    const currentY = y * scaleY;
+    
+    setCropArea({
+      x: Math.min(dragStart.x, currentX),
+      y: Math.min(dragStart.y, currentY),
+      width: Math.abs(currentX - dragStart.x),
+      height: Math.abs(currentY - dragStart.y)
+    });
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  const applyCrop = () => {
+    if (!cropArea || !selectedImageForCrop === null) return;
+    
+    setImages(prev => prev.map((img, idx) => 
+      idx === selectedImageForCrop ? { ...img, cropArea } : img
+    ));
+    setCropMode(false);
+    setSelectedImageForCrop(null);
+  };
+
+  const applyCropToAll = () => {
+    if (!cropArea) return;
+    
+    setImages(prev => prev.map(img => ({ ...img, cropArea })));
+    setCropMode(false);
+    setSelectedImageForCrop(null);
+  };
+
+  const resetCrop = (index = null) => {
+    if (index !== null) {
+      setImages(prev => prev.map((img, idx) => 
+        idx === index ? { ...img, cropArea: null } : img
+      ));
+    } else {
+      setImages(prev => prev.map(img => ({ ...img, cropArea: null })));
+    }
+    setCropArea(null);
+  };
+
+  const cancelCrop = () => {
+    setCropMode(false);
+    setSelectedImageForCrop(null);
+    setCropArea(images[selectedImageForCrop]?.cropArea || null);
+  };
+
+  useEffect(() => {
+    if (cropMode && cropCanvasRef.current && selectedImageForCrop !== null) {
+      const canvas = cropCanvasRef.current;
+      const ctx = canvas.getContext('2d');
+      const img = images[selectedImageForCrop].element;
+      
+      canvas.width = img.width;
+      canvas.height = img.height;
+      ctx.drawImage(img, 0, 0);
+      
+      if (cropArea) {
+        ctx.strokeStyle = '#00ff00';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(cropArea.x, cropArea.y, cropArea.width, cropArea.height);
+        ctx.fillStyle = 'rgba(0, 255, 0, 0.1)';
+        ctx.fillRect(cropArea.x, cropArea.y, cropArea.width, cropArea.height);
+      }
+    }
+  }, [cropMode, cropArea, selectedImageForCrop]);
+
+  const clearImages = () => {
+    setImages([]);
+  };
+
+  const downloadImage = (index) => {
+    const canvas = canvasRefs.current[index];
+    if (!canvas) return;
+    
+    const link = document.createElement('a');
+    link.download = `processed_${images[index].name}`;
+    link.href = canvas.toDataURL();
+    link.click();
+  };
+
+  const downloadAll = () => {
+    images.forEach((_, index) => {
+      setTimeout(() => downloadImage(index), index * 100);
+    });
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-6">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="bg-white/10 backdrop-blur-lg rounded-xl p-6 mb-6 border border-white/20">
+          <h1 className="text-3xl font-bold text-white mb-2 flex items-center gap-3">
+            <Grid3x3 className="w-8 h-8" />
+            ICCD Image Processing Dashboard
+          </h1>
+          <p className="text-white/70">Transform your ICCD images with thermal colormaps and time-sequence visualization</p>
+        </div>
+
+        {/* Crop Modal */}
+        {cropMode && selectedImageForCrop !== null && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-6">
+            <div className="bg-slate-900 rounded-xl p-6 max-w-5xl w-full max-h-[90vh] overflow-auto border border-purple-500/50">
+              <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-2">
+                <Crop className="w-6 h-6" />
+                Crop Image: {images[selectedImageForCrop].name}
+              </h2>
+              <p className="text-white/70 mb-4">Click and drag to select the area you want to keep</p>
+              
+              <div className="bg-black rounded-lg p-4 mb-4 overflow-auto max-h-[60vh]">
+                <canvas
+                  ref={cropCanvasRef}
+                  className="max-w-full h-auto cursor-crosshair"
+                  onMouseDown={handleMouseDown}
+                  onMouseMove={handleMouseMove}
+                  onMouseUp={handleMouseUp}
+                  onMouseLeave={handleMouseUp}
+                />
+              </div>
+
+              {cropArea && (
+                <div className="bg-white/10 rounded-lg p-4 mb-4">
+                  <p className="text-white text-sm">
+                    Selected: {Math.round(cropArea.width)} × {Math.round(cropArea.height)} px 
+                    (Position: {Math.round(cropArea.x)}, {Math.round(cropArea.y)})
+                  </p>
+                </div>
+              )}
+
+              <div className="flex flex-wrap gap-3">
+                <button
+                  onClick={applyCrop}
+                  disabled={!cropArea}
+                  className="flex items-center gap-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 text-white px-6 py-3 rounded-lg transition-colors"
+                >
+                  Apply to This Image
+                </button>
+                <button
+                  onClick={applyCropToAll}
+                  disabled={!cropArea}
+                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white px-6 py-3 rounded-lg transition-colors"
+                >
+                  Apply to All Images
+                </button>
+                <button
+                  onClick={() => setCropArea(null)}
+                  className="flex items-center gap-2 bg-yellow-600 hover:bg-yellow-700 text-white px-6 py-3 rounded-lg transition-colors"
+                >
+                  <RotateCcw className="w-5 h-5" />
+                  Clear Selection
+                </button>
+                <button
+                  onClick={cancelCrop}
+                  className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Controls */}
+        <div className="bg-white/10 backdrop-blur-lg rounded-xl p-6 mb-6 border border-white/20">
+          <div className="flex items-center gap-2 mb-4">
+            <Settings className="w-5 h-5 text-white" />
+            <h2 className="text-xl font-semibold text-white">Controls</h2>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+            <div>
+              <label className="block text-white/90 text-sm font-medium mb-2">Colormap</label>
+              <select 
+                value={colormap}
+                onChange={(e) => setColormap(e.target.value)}
+                className="w-full bg-white/20 border border-white/30 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+              >
+                <option value="jet">Jet (Thermal)</option>
+                <option value="hot">Hot</option>
+                <option value="viridis">Viridis</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-white/90 text-sm font-medium mb-2">
+                Brightness: {brightness}%
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="200"
+                value={brightness}
+                onChange={(e) => setBrightness(Number(e.target.value))}
+                className="w-full h-2 bg-white/20 rounded-lg appearance-none cursor-pointer"
+              />
+            </div>
+
+            <div>
+              <label className="block text-white/90 text-sm font-medium mb-2">
+                Contrast: {contrast}%
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="200"
+                value={contrast}
+                onChange={(e) => setContrast(Number(e.target.value))}
+                className="w-full h-2 bg-white/20 rounded-lg appearance-none cursor-pointer"
+              />
+            </div>
+
+            <div>
+              <label className="block text-white/90 text-sm font-medium mb-2">Grid Columns</label>
+              <select 
+                value={gridCols}
+                onChange={(e) => setGridCols(Number(e.target.value))}
+                className="w-full bg-white/20 border border-white/30 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+              >
+                <option value="2">2 Columns</option>
+                <option value="3">3 Columns</option>
+                <option value="4">4 Columns</option>
+                <option value="5">5 Columns</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            <label className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg cursor-pointer transition-colors">
+              <Upload className="w-5 h-5" />
+              <span className="font-medium">Upload Images</span>
+              <input
+                type="file"
+                multiple
+                accept="image/*"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+            </label>
+
+            <button
+              onClick={downloadAll}
+              disabled={images.length === 0}
+              className="flex items-center gap-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 text-white px-6 py-3 rounded-lg transition-colors"
+            >
+              <Download className="w-5 h-5" />
+              <span className="font-medium">Download All</span>
+            </button>
+
+            <button
+              onClick={() => resetCrop()}
+              disabled={images.length === 0}
+              className="flex items-center gap-2 bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-600 text-white px-6 py-3 rounded-lg transition-colors"
+            >
+              <RotateCcw className="w-5 h-5" />
+              <span className="font-medium">Reset All Crops</span>
+            </button>
+
+            <button
+              onClick={clearImages}
+              disabled={images.length === 0}
+              className="flex items-center gap-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 text-white px-6 py-3 rounded-lg transition-colors"
+            >
+              <Trash2 className="w-5 h-5" />
+              <span className="font-medium">Clear All</span>
+            </button>
+
+            <label className="flex items-center gap-2 text-white">
+              <input
+                type="checkbox"
+                checked={showLabels}
+                onChange={(e) => setShowLabels(e.target.checked)}
+                className="w-5 h-5"
+              />
+              <span>Show Time Labels</span>
+            </label>
+          </div>
+        </div>
+
+        {/* Image Grid */}
+        {images.length > 0 ? (
+          <div 
+            className="grid gap-4"
+            style={{
+              gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))`
+            }}
+          >
+            {images.map((img, index) => (
+              <div key={index} className="bg-white/10 backdrop-blur-lg rounded-xl p-4 border border-white/20">
+                <div className="relative">
+                  <canvas
+                    ref={el => canvasRefs.current[index] = el}
+                    className="w-full h-auto rounded-lg"
+                  />
+                  {showLabels && (
+                    <div className="absolute bottom-2 left-2 bg-black/70 text-white px-3 py-1 rounded text-sm font-medium">
+                      {img.timestamp}
+                    </div>
+                  )}
+                  {img.cropArea && (
+                    <div className="absolute top-2 right-2 bg-green-600 text-white px-2 py-1 rounded text-xs font-medium">
+                      Cropped
+                    </div>
+                  )}
+                </div>
+                <div className="mt-3 flex items-center justify-between gap-2">
+                  <span className="text-white/80 text-sm truncate flex-1">{img.name}</span>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => startCropMode(index)}
+                      className="text-white/80 hover:text-white transition-colors p-1"
+                      title="Crop Image"
+                    >
+                      <Crop className="w-4 h-4" />
+                    </button>
+                    {img.cropArea && (
+                      <button
+                        onClick={() => resetCrop(index)}
+                        className="text-yellow-400 hover:text-yellow-300 transition-colors p-1"
+                        title="Reset Crop"
+                      >
+                        <RotateCcw className="w-4 h-4" />
+                      </button>
+                    )}
+                    <button
+                      onClick={() => downloadImage(index)}
+                      className="text-white/80 hover:text-white transition-colors p-1"
+                      title="Download Image"
+                    >
+                      <Download className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="bg-white/10 backdrop-blur-lg rounded-xl p-12 border-2 border-dashed border-white/30 text-center">
+            <Upload className="w-16 h-16 text-white/50 mx-auto mb-4" />
+            <h3 className="text-xl font-semibold text-white mb-2">No Images Loaded</h3>
+            <p className="text-white/70 mb-4">Upload your ICCD images to begin processing</p>
+            <label className="inline-flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg cursor-pointer transition-colors">
+              <Upload className="w-5 h-5" />
+              <span className="font-medium">Choose Files</span>
+              <input
+                type="file"
+                multiple
+                accept="image/*"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+            </label>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default ICCDDashboard;
