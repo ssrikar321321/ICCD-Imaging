@@ -4,8 +4,8 @@ from PIL import Image, ImageDraw, ImageFont
 import io
 from scipy.ndimage import gaussian_filter
 from skimage import exposure
-import matplotlib.pyplot as plt
 import matplotlib.cm as cm
+from textwrap import dedent
 
 # Page configuration
 st.set_page_config(
@@ -16,60 +16,64 @@ st.set_page_config(
 )
 
 # Custom CSS
-st.markdown("""
-<style>
-    .stApp {
-        background: linear-gradient(135deg, #1e293b 0%, #581c87 50%, #1e293b 100%);
-    }
-    .main-header {
-        background: rgba(255, 255, 255, 0.1);
-        backdrop-filter: blur(10px);
-        padding: 2rem;
-        border-radius: 1rem;
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        margin-bottom: 2rem;
-    }
-    .main-header h1 {
-        color: white;
-        margin: 0;
-        font-size: 2.5rem;
-    }
-    .main-header p {
-        color: rgba(255, 255, 255, 0.7);
-        margin: 0.5rem 0 0 0;
-    }
-    .stButton>button {
-        background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
-        color: white;
-        border: none;
-        border-radius: 0.5rem;
-        padding: 0.75rem 1.5rem;
-        font-weight: 600;
-    }
-    .stButton>button:hover {
-        background: linear-gradient(135deg, #6d28d9 0%, #9333ea 100%);
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(168, 85, 247, 0.4);
-    }
-    .metric-card {
-        background: rgba(255, 255, 255, 0.1);
-        backdrop-filter: blur(10px);
-        border-radius: 0.75rem;
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        padding: 1rem;
-        text-align: center;
-    }
-    .metric-value {
-        font-size: 2rem;
-        font-weight: bold;
-        color: white;
-    }
-    .metric-label {
-        color: rgba(255, 255, 255, 0.7);
-        font-size: 0.9rem;
-    }
-</style>
-""", unsafe_allow_html=True)
+CUSTOM_CSS = dedent(
+    """
+    <style>
+        .stApp {
+            background: linear-gradient(135deg, #1e293b 0%, #581c87 50%, #1e293b 100%);
+        }
+        .main-header {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 2rem;
+            border-radius: 1rem;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            margin-bottom: 2rem;
+        }
+        .main-header h1 {
+            color: white;
+            margin: 0;
+            font-size: 2.5rem;
+        }
+        .main-header p {
+            color: rgba(255, 255, 255, 0.7);
+            margin: 0.5rem 0 0 0;
+        }
+        .stButton>button {
+            background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
+            color: white;
+            border: none;
+            border-radius: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            font-weight: 600;
+        }
+        .stButton>button:hover {
+            background: linear-gradient(135deg, #6d28d9 0%, #9333ea 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(168, 85, 247, 0.4);
+        }
+        .metric-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 0.75rem;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 1rem;
+            text-align: center;
+        }
+        .metric-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: white;
+        }
+        .metric-label {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 0.9rem;
+        }
+    </style>
+    """
+)
+
+st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
 def add_timestamp_overlay(image: Image.Image, text: str) -> Image.Image:
     """Return a copy of the image with the timestamp text rendered on top."""
