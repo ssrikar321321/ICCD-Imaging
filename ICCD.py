@@ -191,6 +191,14 @@ def apply_gaussian_smoothing(image_array, sigma=2):
     """Apply Gaussian smoothing to reduce noise"""
     return gaussian_filter(image_array, sigma=sigma).astype(np.uint8)
 
+def get_raw_display_image(img, crop_coords=None):
+    """Return grayscale raw image optionally cropped for preview."""
+    raw_gray = img.convert('L')
+    if crop_coords:
+        y1, y2, x1, x2 = crop_coords
+        raw_gray = raw_gray.crop((x1, y1, x2, y2))
+    return raw_gray
+
 def process_image(img, background_img, settings):
     """Process image with all settings - FIXED for dark ICCD images"""
     # Convert to grayscale numpy array
@@ -383,6 +391,7 @@ with st.sidebar:
     # Layout
     grid_cols = st.selectbox("📐 Columns", [2, 3, 4, 5], index=2)
     show_labels = st.checkbox("🏷️ Time Labels", value=True)
+    show_raw_preview = st.checkbox("👁️ Raw Preview", value=False)
     
     st.divider()
     
@@ -499,7 +508,21 @@ if st.session_state.processed_images:
                     img_data = st.session_state.processed_images[img_idx]
                     
                     caption = img_data['timestamp'] if show_labels else ""
-                    st.image(img_data['image'], caption=caption, use_container_width=True)
+
+                    if show_raw_preview:
+                        processed_tab, raw_tab = st.tabs(["Processed", "Raw"])
+
+                        with processed_tab:
+                            st.image(img_data['image'], caption=caption, use_container_width=True)
+
+                        with raw_tab:
+                            raw_image = get_raw_display_image(
+                                st.session_state.uploaded_images[img_idx]['image'],
+                                st.session_state.crop_coords
+                            )
+                            st.image(raw_image, caption="Raw", use_container_width=True)
+                    else:
+                        st.image(img_data['image'], caption=caption, use_container_width=True)
                     
                     # Download button
                     buffered = io.BytesIO()
