@@ -4,6 +4,8 @@ from PIL import Image
 import io
 from scipy.ndimage import gaussian_filter
 from skimage import exposure
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
 
 # Page configuration
 st.set_page_config(
@@ -13,7 +15,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for attractive styling
+# Custom CSS
 st.markdown("""
 <style>
     .stApp {
@@ -43,7 +45,6 @@ st.markdown("""
         border-radius: 0.5rem;
         padding: 0.75rem 1.5rem;
         font-weight: 600;
-        transition: all 0.3s;
     }
     .stButton>button:hover {
         background: linear-gradient(135deg, #6d28d9 0%, #9333ea 100%);
@@ -67,134 +68,16 @@ st.markdown("""
         color: rgba(255, 255, 255, 0.7);
         font-size: 0.9rem;
     }
-    div[data-testid="stExpander"] {
-        background: rgba(255, 255, 255, 0.05);
-        border-radius: 0.5rem;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-    }
 </style>
 """, unsafe_allow_html=True)
 
-# Colormap definitions
-COLORMAPS = {
-    'jet': np.array([
-        [0, 0, 143], [0, 0, 159], [0, 0, 175], [0, 0, 191], [0, 0, 207],
-        [0, 0, 223], [0, 0, 239], [0, 0, 255], [0, 16, 255], [0, 32, 255],
-        [0, 48, 255], [0, 64, 255], [0, 80, 255], [0, 96, 255], [0, 112, 255],
-        [0, 128, 255], [0, 143, 255], [0, 159, 255], [0, 175, 255], [0, 191, 255],
-        [0, 207, 255], [0, 223, 255], [0, 239, 255], [0, 255, 255], [16, 255, 239],
-        [32, 255, 223], [48, 255, 207], [64, 255, 191], [80, 255, 175], [96, 255, 159],
-        [112, 255, 143], [128, 255, 128], [143, 255, 112], [159, 255, 96], [175, 255, 80],
-        [191, 255, 64], [207, 255, 48], [223, 255, 32], [239, 255, 16], [255, 255, 0],
-        [255, 239, 0], [255, 223, 0], [255, 207, 0], [255, 191, 0], [255, 175, 0],
-        [255, 159, 0], [255, 143, 0], [255, 128, 0], [255, 112, 0], [255, 96, 0],
-        [255, 80, 0], [255, 64, 0], [255, 48, 0], [255, 32, 0], [255, 16, 0],
-        [255, 0, 0], [239, 0, 0], [223, 0, 0], [207, 0, 0], [191, 0, 0],
-        [175, 0, 0], [159, 0, 0], [143, 0, 0], [128, 0, 0]
-    ], dtype=np.uint8),
-    'inferno': np.array([
-        [0, 0, 4], [20, 11, 53], [40, 17, 88], [60, 20, 115], [80, 20, 130],
-        [100, 21, 140], [120, 24, 147], [140, 30, 150], [160, 38, 150], [180, 47, 148],
-        [200, 57, 143], [220, 68, 135], [240, 80, 125], [252, 93, 113], [255, 107, 99],
-        [255, 121, 84], [255, 136, 69], [255, 150, 54], [255, 165, 44], [255, 180, 38],
-        [255, 195, 35], [255, 210, 37], [255, 225, 50], [255, 240, 75], [252, 255, 164]
-    ] * 3, dtype=np.uint8),
-    'hot': np.array([
-        [0, 0, 0], [11, 0, 0], [21, 0, 0], [32, 0, 0], [43, 0, 0],
-        [53, 0, 0], [64, 0, 0], [74, 0, 0], [85, 0, 0], [96, 0, 0],
-        [106, 0, 0], [117, 0, 0], [128, 0, 0], [138, 0, 0], [149, 0, 0],
-        [159, 0, 0], [170, 0, 0], [181, 0, 0], [191, 0, 0], [202, 0, 0],
-        [213, 0, 0], [223, 0, 0], [234, 0, 0], [244, 0, 0], [255, 0, 0],
-        [255, 11, 0], [255, 21, 0], [255, 32, 0], [255, 43, 0], [255, 53, 0],
-        [255, 64, 0], [255, 74, 0], [255, 85, 0], [255, 96, 0], [255, 106, 0],
-        [255, 117, 0], [255, 128, 0], [255, 138, 0], [255, 149, 0], [255, 159, 0],
-        [255, 170, 0], [255, 181, 0], [255, 191, 0], [255, 202, 0], [255, 213, 0],
-        [255, 223, 0], [255, 234, 0], [255, 244, 0], [255, 255, 0], [255, 255, 16],
-        [255, 255, 32], [255, 255, 48], [255, 255, 64], [255, 255, 80], [255, 255, 96],
-        [255, 255, 112], [255, 255, 128], [255, 255, 143], [255, 255, 159], [255, 255, 175],
-        [255, 255, 191], [255, 255, 207], [255, 255, 223], [255, 255, 239], [255, 255, 255]
-    ], dtype=np.uint8),
-    'viridis': np.array([
-        [68, 1, 84], [70, 8, 92], [71, 16, 99], [72, 23, 105], [72, 29, 111],
-        [72, 35, 116], [72, 40, 120], [71, 46, 124], [70, 51, 127], [69, 56, 130],
-        [68, 62, 133], [66, 67, 134], [65, 73, 137], [63, 78, 138], [61, 83, 139],
-        [58, 88, 140], [56, 93, 141], [53, 99, 141], [51, 104, 142], [48, 110, 142],
-        [46, 116, 142], [43, 121, 142], [41, 127, 142], [39, 132, 142], [37, 137, 142],
-        [35, 143, 141], [33, 148, 140], [31, 154, 138], [31, 159, 136], [31, 165, 133],
-        [33, 170, 131], [37, 175, 127], [42, 180, 124], [49, 185, 119], [56, 190, 113],
-        [66, 195, 107], [78, 200, 100], [92, 205, 91], [108, 210, 81], [127, 215, 70],
-        [147, 220, 50], [169, 224, 32], [192, 228, 21], [217, 232, 16], [243, 237, 16]
-    ], dtype=np.uint8)
-}
-
-def normalize_image(image_array, percentile_low=1, percentile_high=99):
-    """Normalize image using percentile stretching - CRITICAL for dark ICCD images"""
-    p_low = np.percentile(image_array, percentile_low)
-    p_high = np.percentile(image_array, percentile_high)
+def process_iccd_image(img, background_img, settings):
+    """Process ICCD image - SIMPLIFIED AND FIXED"""
     
-    # Avoid division by zero
-    if p_high - p_low < 1:
-        return image_array
-    
-    # Stretch to full range
-    normalized = (image_array - p_low) / (p_high - p_low) * 255.0
-    normalized = np.clip(normalized, 0, 255)
-    return normalized.astype(np.uint8)
-
-def apply_colormap(image_array, colormap_name):
-    """Apply colormap to grayscale image"""
-    if len(image_array.shape) == 3:
-        gray = np.mean(image_array, axis=2).astype(np.uint8)
-    else:
-        gray = image_array.astype(np.uint8)
-    
-    cmap = COLORMAPS[colormap_name]
-    indices = (gray * (len(cmap) - 1) / 255).astype(int)
-    indices = np.clip(indices, 0, len(cmap) - 1)
-    colored = cmap[indices]
-    
-    return colored
-
-def adjust_image(image_array, brightness, contrast):
-    """Adjust brightness and contrast"""
-    img = image_array.astype(float)
-    
-    # Apply contrast first
-    if contrast != 0:
-        factor = (259 * (contrast + 255)) / (255 * (259 - contrast))
-        img = factor * (img - 128) + 128
-    
-    # Apply brightness
-    img = img + brightness
-    
-    # Clip values
-    img = np.clip(img, 0, 255)
-    return img.astype(np.uint8)
-
-def enhance_contrast_clahe(image_array, clip_limit=0.03):
-    """Apply Contrast Limited Adaptive Histogram Equalization (CLAHE)"""
-    # Normalize to 0-1 range
-    if image_array.max() > 1:
-        image_array = image_array / 255.0
-    
-    # Apply CLAHE
-    enhanced = exposure.equalize_adapthist(image_array, clip_limit=clip_limit)
-    return (enhanced * 255).astype(np.uint8)
-
-def apply_threshold(image_array, threshold_value):
-    """Apply thresholding to remove low intensity noise"""
-    thresholded = image_array.copy()
-    thresholded[thresholded < threshold_value] = 0
-    return thresholded
-
-def apply_gaussian_smoothing(image_array, sigma=2):
-    """Apply Gaussian smoothing to reduce noise"""
-    return gaussian_filter(image_array, sigma=sigma).astype(np.uint8)
-
-def process_image(img, background_img, settings):
-    """Process image with all settings - FIXED for dark ICCD images"""
     # Convert to grayscale numpy array
-    img_array = np.array(img.convert('L')).astype(np.float32)
+    if img.mode != 'L':
+        img = img.convert('L')
+    img_array = np.array(img, dtype=np.float64)
     
     # Apply crop if specified
     if settings.get('crop_coords'):
@@ -203,44 +86,61 @@ def process_image(img, background_img, settings):
     
     # Background subtraction
     if background_img is not None and settings.get('use_bg_subtraction', False):
-        bg_array = np.array(background_img.convert('L')).astype(np.float32)
+        bg_array = np.array(background_img.convert('L'), dtype=np.float64)
         if settings.get('crop_coords'):
             bg_array = bg_array[y1:y2, x1:x2]
         
         if img_array.shape == bg_array.shape:
-            img_array = np.clip(img_array - bg_array, 0, 255)
+            img_array = np.maximum(img_array - bg_array, 0)
     
-    # Convert back to uint8
-    img_array = img_array.astype(np.uint8)
-    
-    # STEP 1: Normalize using percentile stretching - THIS IS CRITICAL!
-    if settings.get('use_normalize', True):
-        img_array = normalize_image(img_array, 
-                                    settings.get('percentile_low', 1),
-                                    settings.get('percentile_high', 99))
-    
-    # STEP 2: CLAHE enhancement
+    # CLAHE enhancement
     if settings.get('use_clahe', False):
-        img_array = enhance_contrast_clahe(img_array, settings.get('clahe_clip_limit', 0.03))
+        img_normalized = img_array / 255.0
+        img_normalized = exposure.equalize_adapthist(
+            img_normalized, 
+            clip_limit=settings.get('clahe_clip_limit', 0.03)
+        )
+        img_array = img_normalized * 255.0
     
-    # STEP 3: Gaussian smoothing
+    # Gaussian smoothing
     if settings.get('use_smoothing', False):
-        img_array = apply_gaussian_smoothing(img_array, settings.get('gaussian_sigma', 2))
+        img_array = gaussian_filter(img_array, sigma=settings.get('gaussian_sigma', 2))
     
-    # STEP 4: Thresholding
+    # Thresholding
     if settings.get('use_threshold', False):
-        img_array = apply_threshold(img_array, settings.get('threshold_value', 5))
+        threshold = settings.get('threshold_value', 5)
+        img_array[img_array < threshold] = 0
     
-    # STEP 5: Adjust brightness and contrast
-    brightness_adj = settings['brightness'] - 100
-    contrast_adj = settings['contrast'] - 100
-    if brightness_adj != 0 or contrast_adj != 0:
-        img_array = adjust_image(img_array, brightness_adj, contrast_adj)
+    # Normalize to 0-1 range using percentiles - THIS IS THE KEY!
+    p_low = np.percentile(img_array, settings.get('percentile_low', 1))
+    p_high = np.percentile(img_array, settings.get('percentile_high', 99))
     
-    # STEP 6: Apply colormap
-    colored = apply_colormap(img_array, settings['colormap'])
+    if p_high > p_low:
+        img_array = (img_array - p_low) / (p_high - p_low)
+        img_array = np.clip(img_array, 0, 1)
+    else:
+        img_array = img_array / (img_array.max() + 1e-10)
     
-    return Image.fromarray(colored)
+    # Apply brightness and contrast
+    brightness = (settings['brightness'] - 100) / 100.0
+    contrast = (settings['contrast'] - 100) / 100.0
+    
+    img_array = img_array + brightness
+    if contrast != 0:
+        factor = (1 + contrast)
+        img_array = (img_array - 0.5) * factor + 0.5
+    
+    img_array = np.clip(img_array, 0, 1)
+    
+    # Apply colormap using matplotlib
+    cmap_name = settings['colormap']
+    cmap = cm.get_cmap(cmap_name)
+    
+    # Apply colormap and convert to RGB (0-255)
+    colored = cmap(img_array)
+    colored_rgb = (colored[:, :, :3] * 255).astype(np.uint8)
+    
+    return Image.fromarray(colored_rgb)
 
 # Initialize session state
 if 'uploaded_images' not in st.session_state:
@@ -256,7 +156,7 @@ if 'crop_coords' not in st.session_state:
 st.markdown("""
 <div class="main-header">
     <h1>🔬 ICCD Image Processing Dashboard</h1>
-    <p>Advanced image processing with background subtraction, CLAHE, and thermal colormaps</p>
+    <p>Transform dark ICCD images into vibrant thermal visualizations</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -267,18 +167,16 @@ with st.sidebar:
     # File upload
     uploaded_files = st.file_uploader(
         "📤 Upload ICCD Images",
-        type=['png', 'jpg', 'jpeg', 'tiff', 'bmp'],
+        type=['png', 'jpg', 'jpeg', 'tiff', 'bmp', 'tif'],
         accept_multiple_files=True,
-        key="file_uploader",
-        help="Upload your ICCD measurement images"
+        key="file_uploader"
     )
     
     # Background image upload
     background_file = st.file_uploader(
-        "🖼️ Upload Background Image (Optional)",
-        type=['png', 'jpg', 'jpeg', 'tiff', 'bmp'],
-        key="bg_uploader",
-        help="Background image for noise subtraction"
+        "🖼️ Background Image (Optional)",
+        type=['png', 'jpg', 'jpeg', 'tiff', 'bmp', 'tif'],
+        key="bg_uploader"
     )
     
     if background_file:
@@ -288,57 +186,45 @@ with st.sidebar:
     st.divider()
     
     # Crop Settings
-    with st.expander("✂️ Crop Settings", expanded=False):
-        st.info("Focus on region of interest")
-        
+    with st.expander("✂️ Crop Settings"):
         if st.session_state.uploaded_images:
             first_img = st.session_state.uploaded_images[0]['image']
             img_width, img_height = first_img.size
             
             col1, col2 = st.columns(2)
             with col1:
-                crop_top = st.number_input("Top (Y)", 0, img_height, 0, 10)
-                crop_left = st.number_input("Left (X)", 0, img_width, 0, 10)
+                crop_top = st.number_input("Top", 0, img_height, 0, 10)
+                crop_left = st.number_input("Left", 0, img_width, 0, 10)
             with col2:
-                crop_bottom = st.number_input("Bottom (Y)", 0, img_height, img_height, 10)
-                crop_right = st.number_input("Right (X)", 0, img_width, img_width, 10)
+                crop_bottom = st.number_input("Bottom", 0, img_height, img_height, 10)
+                crop_right = st.number_input("Right", 0, img_width, img_width, 10)
             
             if st.button("✅ Apply Crop", use_container_width=True):
                 if crop_bottom > crop_top and crop_right > crop_left:
                     st.session_state.crop_coords = (crop_top, crop_bottom, crop_left, crop_right)
-                    st.success(f"✂️ Crop: {crop_right-crop_left}×{crop_bottom-crop_top} px")
+                    st.success(f"✂️ {crop_right-crop_left}×{crop_bottom-crop_top} px")
                 else:
                     st.error("Invalid coordinates!")
             
-            if st.button("🔄 Reset Crop", use_container_width=True):
+            if st.button("🔄 Reset", use_container_width=True):
                 st.session_state.crop_coords = None
-                st.success("Crop reset!")
         else:
-            st.warning("Upload images first")
+            st.info("Upload images first")
     
     st.divider()
     
-    # Normalization Settings (NEW - CRITICAL!)
-    with st.expander("📊 Normalization (Critical for Dark Images!)", expanded=True):
-        use_normalize = st.checkbox(
-            "Enable Percentile Stretching",
-            value=True,
-            help="⚡ ESSENTIAL - stretches histogram to use full range"
-        )
-        
-        if use_normalize:
-            col1, col2 = st.columns(2)
-            with col1:
-                percentile_low = st.slider("Low %", 0, 10, 1, help="Clip bottom %")
-            with col2:
-                percentile_high = st.slider("High %", 90, 100, 99, help="Clip top %")
-            
-            st.caption("💡 Lower values = more aggressive stretching")
+    # Normalization
+    st.subheader("📊 Normalization")
+    col1, col2 = st.columns(2)
+    with col1:
+        percentile_low = st.slider("Low %", 0, 10, 1)
+    with col2:
+        percentile_high = st.slider("High %", 90, 100, 99)
     
     st.divider()
     
     # Advanced Processing
-    with st.expander("🔧 Advanced Processing", expanded=False):
+    with st.expander("🔧 Advanced Filters"):
         use_bg_subtraction = st.checkbox(
             "Background Subtraction",
             value=False,
@@ -346,21 +232,18 @@ with st.sidebar:
         )
         
         use_clahe = st.checkbox("CLAHE Enhancement", value=False)
-        
         if use_clahe:
-            clahe_clip_limit = st.slider("CLAHE Clip", 0.001, 0.100, 0.030, 0.001, format="%.3f")
+            clahe_clip_limit = st.slider("CLAHE Clip", 0.01, 0.10, 0.03, 0.01)
         else:
-            clahe_clip_limit = 0.030
+            clahe_clip_limit = 0.03
         
         use_threshold = st.checkbox("Thresholding", value=False)
-        
         if use_threshold:
             threshold_value = st.slider("Threshold", 0, 50, 5)
         else:
             threshold_value = 5
         
         use_smoothing = st.checkbox("Gaussian Smoothing", value=False)
-        
         if use_smoothing:
             gaussian_sigma = st.slider("Sigma", 0.5, 5.0, 2.0, 0.5)
         else:
@@ -368,24 +251,26 @@ with st.sidebar:
     
     st.divider()
     
-    # Basic Processing
+    # Colormap and adjustments
     colormap = st.selectbox(
         "🎨 Colormap",
-        options=['inferno', 'jet', 'hot', 'viridis'],
-        index=0
+        options=['inferno', 'plasma', 'viridis', 'hot', 'jet', 'magma', 'coolwarm'],
+        index=0,
+        help="Inferno works great for plasma jets!"
     )
     
-    brightness = st.slider("💡 Brightness", 0, 200, 100)
-    contrast = st.slider("🔆 Contrast", 0, 200, 100)
+    brightness = st.slider("💡 Brightness", 0, 200, 100, 1)
+    contrast = st.slider("🔆 Contrast", 0, 200, 100, 1)
     
     st.divider()
     
     # Layout
-    grid_cols = st.selectbox("📐 Columns", [2, 3, 4, 5], index=2)
-    show_labels = st.checkbox("🏷️ Time Labels", value=True)
+    grid_cols = st.selectbox("📐 Grid Columns", [2, 3, 4, 5], index=2)
+    show_labels = st.checkbox("🏷️ Show Time Labels", value=True)
     
     st.divider()
     
+    # Clear button
     if st.button("🗑️ Clear All", use_container_width=True):
         st.session_state.uploaded_images = []
         st.session_state.processed_images = []
@@ -405,15 +290,14 @@ if uploaded_files:
                 'timestamp': f"Time = {i * 20 + 58} ns"
             })
 
-# Process images with current settings
+# Process images
 if st.session_state.uploaded_images:
     settings = {
         'colormap': colormap,
         'brightness': brightness,
         'contrast': contrast,
-        'use_normalize': use_normalize,
-        'percentile_low': percentile_low if use_normalize else 1,
-        'percentile_high': percentile_high if use_normalize else 99,
+        'percentile_low': percentile_low,
+        'percentile_high': percentile_high,
         'use_bg_subtraction': use_bg_subtraction,
         'use_clahe': use_clahe,
         'clahe_clip_limit': clahe_clip_limit,
@@ -425,61 +309,57 @@ if st.session_state.uploaded_images:
     }
     
     st.session_state.processed_images = []
-    for img_data in st.session_state.uploaded_images:
-        processed = process_image(
-            img_data['image'],
-            st.session_state.background_image,
-            settings
-        )
-        st.session_state.processed_images.append({
-            'name': img_data['name'],
-            'image': processed,
-            'timestamp': img_data['timestamp']
-        })
+    
+    # Show processing status
+    with st.spinner('Processing images...'):
+        for img_data in st.session_state.uploaded_images:
+            try:
+                processed = process_iccd_image(
+                    img_data['image'],
+                    st.session_state.background_image,
+                    settings
+                )
+                st.session_state.processed_images.append({
+                    'name': img_data['name'],
+                    'image': processed,
+                    'timestamp': img_data['timestamp']
+                })
+            except Exception as e:
+                st.error(f"Error processing {img_data['name']}: {str(e)}")
 
 # Display metrics
 if st.session_state.processed_images:
-    col1, col2, col3, col4, col5 = st.columns(5)
+    col1, col2, col3, col4 = st.columns(4)
     
     with col1:
         st.markdown(f"""
         <div class="metric-card">
             <div class="metric-value">{len(st.session_state.processed_images)}</div>
-            <div class="metric-label">Images</div>
+            <div class="metric-label">Images Processed</div>
         </div>
         """, unsafe_allow_html=True)
     
     with col2:
-        norm_status = "✅" if use_normalize else "❌"
         st.markdown(f"""
         <div class="metric-card">
-            <div class="metric-value">{norm_status}</div>
-            <div class="metric-label">Normalized</div>
+            <div class="metric-value">{percentile_low}-{percentile_high}%</div>
+            <div class="metric-label">Percentile Range</div>
         </div>
         """, unsafe_allow_html=True)
     
     with col3:
-        processing_count = sum([use_bg_subtraction, use_clahe, use_threshold, use_smoothing])
+        filters = sum([use_bg_subtraction, use_clahe, use_threshold, use_smoothing])
         st.markdown(f"""
         <div class="metric-card">
-            <div class="metric-value">{processing_count}</div>
-            <div class="metric-label">Filters</div>
+            <div class="metric-value">{filters}</div>
+            <div class="metric-label">Active Filters</div>
         </div>
         """, unsafe_allow_html=True)
     
     with col4:
-        crop_status = "✂️" if st.session_state.crop_coords else "⬜"
         st.markdown(f"""
         <div class="metric-card">
-            <div class="metric-value">{crop_status}</div>
-            <div class="metric-label">Cropped</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col5:
-        st.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-value">{colormap[:3].upper()}</div>
+            <div class="metric-value">{colormap.upper()[:3]}</div>
             <div class="metric-label">Colormap</div>
         </div>
         """, unsafe_allow_html=True)
@@ -498,7 +378,8 @@ if st.session_state.processed_images:
                 with cols[col_idx]:
                     img_data = st.session_state.processed_images[img_idx]
                     
-                    caption = img_data['timestamp'] if show_labels else ""
+                    # Display image
+                    caption = img_data['timestamp'] if show_labels else None
                     st.image(img_data['image'], caption=caption, use_container_width=True)
                     
                     # Download button
@@ -513,20 +394,24 @@ if st.session_state.processed_images:
                         use_container_width=True
                     )
 else:
+    # Empty state
     st.markdown("""
     <div style='text-align: center; padding: 4rem; background: rgba(255, 255, 255, 0.1); 
                 backdrop-filter: blur(10px); border-radius: 1rem; border: 2px dashed rgba(255, 255, 255, 0.3);'>
         <h2 style='color: white; margin-bottom: 1rem;'>📤 No Images Loaded</h2>
         <p style='color: rgba(255, 255, 255, 0.7); font-size: 1.1rem;'>
-            Upload your ICCD images to begin processing
+            Upload your ICCD images to see them transformed with thermal colormaps
+        </p>
+        <p style='color: rgba(255, 255, 255, 0.5); font-size: 0.9rem; margin-top: 1rem;'>
+            Supports: PNG, JPG, TIFF, BMP
         </p>
     </div>
     """, unsafe_allow_html=True)
 
 # Footer
-st.markdown("<br><br>", unsafe_allow_html=True)
+st.markdown("<br>", unsafe_allow_html=True)
 st.markdown("""
 <div style='text-align: center; color: rgba(255, 255, 255, 0.5); padding: 1rem;'>
-    <small>ICCD Image Processing Dashboard | Powered by Streamlit</small>
+    <small>ICCD Image Processing Dashboard • Powered by Streamlit</small>
 </div>
 """, unsafe_allow_html=True)
