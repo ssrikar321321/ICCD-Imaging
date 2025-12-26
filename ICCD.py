@@ -1,7 +1,15 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Fri Dec 26 15:02:26 2025
+
+@author: LENOVO
+"""
+
 import streamlit as st
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 import io
+import math
 from scipy.ndimage import gaussian_filter
 from skimage import exposure
 import matplotlib.cm as cm
@@ -70,8 +78,8 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-def add_timestamp_overlay(image, text):
-    """Add timestamp overlay to image"""
+def add_timestamp_overlay(image, text, font_size_param):
+    """Add timestamp overlay to image with adjustable font size"""
     if not text:
         return image
 
@@ -79,7 +87,11 @@ def add_timestamp_overlay(image, text):
     overlay = Image.new("RGBA", base.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
 
-    font_size = max(16, base.width // 25)
+    # Use user provided font size or fallback to dynamic calculation if 0/None
+    if font_size_param > 0:
+        font_size = font_size_param
+    else:
+        font_size = max(16, base.width // 25)
     
     try:
         font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", font_size)
@@ -108,6 +120,41 @@ def add_timestamp_overlay(image, text):
 
     combined = Image.alpha_composite(base, overlay)
     return combined.convert("RGB")
+
+
+def create_combined_grid(images, cols, padding=10):
+    """Stitch multiple images into a single grid"""
+    if not images:
+        return None
+        
+    n_images = len(images)
+    rows = math.ceil(n_images / cols)
+    
+    # Assume all images are same size as the first one for simplicity
+    # (The cropping logic ensures they usually are)
+    w, h = images[0].size
+    
+    grid_w = cols * w + (cols - 1) * padding
+    grid_h = rows * h + (rows - 1) * padding
+    
+    # Create black background canvas
+    grid_img = Image.new('RGB', (grid_w, grid_h), (0, 0, 0))
+    
+    for idx, img in enumerate(images):
+        r = idx // cols
+        c = idx % cols
+        
+        x = c * (w + padding)
+        y = r * (h + padding)
+        
+        # Resize if necessary (though usually not needed if crop is applied globally)
+        if img.size != (w, h):
+            img_resized = img.resize((w, h))
+            grid_img.paste(img_resized, (x, y))
+        else:
+            grid_img.paste(img, (x, y))
+            
+    return grid_img
 
 
 def process_iccd_image(img, background_img, settings):
@@ -321,6 +368,15 @@ with st.sidebar:
         
         time_unit = st.selectbox("Time Unit", options=time_units, index=default_index)
 
+        # Added Font Size Adjustment
+        timestamp_font_size = st.slider(
+            "Text Font Size", 
+            min_value=10, 
+            max_value=100, 
+            value=30, 
+            help="Adjust the size of the timestamp text on the images"
+        )
+
         st.session_state.time_settings = {
             'start_time': start_time,
             'interval': time_interval,
@@ -329,7 +385,7 @@ with st.sidebar:
     
     st.divider()
     
-    grid_cols = st.selectbox("📐 Grid Columns", [2, 3, 4, 5], index=2)
+    grid_cols = st.selectbox("📐 Grid Columns (Display)", [2, 3, 4, 5], index=2)
     show_labels = st.checkbox("🏷️ Show Time Labels", value=True)
     
     st.divider()
@@ -396,7 +452,8 @@ if st.session_state.uploaded_images:
                 )
                 
                 if show_labels:
-                    overlay_image = add_timestamp_overlay(processed, img_data['timestamp'])
+                    # Pass the user selected font size here
+                    overlay_image = add_timestamp_overlay(processed, img_data['timestamp'], timestamp_font_size)
                 else:
                     overlay_image = processed
                 
@@ -471,6 +528,37 @@ if st.session_state.processed_images:
                         key=f"download_{img_idx}",
                         use_container_width=True
                     )
+    
+    st.divider()
+
+    # --- NEW FEATURE: Combined Grid Export ---
+    st.subheader("🧩 Combined Grid Export")
+    st.markdown("Group all processed images into a single image file for easy publication.")
+    
+    c1, c2 = st.columns([1, 2])
+    with c1:
+        export_cols = st.number_input("Columns in Combined Image", min_value=1, max_value=10, value=5)
+        padding_px = st.number_input("Padding (pixels)", min_value=0, max_value=50, value=10)
+    
+    if st.button("🖼️ Generate Combined Grid", use_container_width=True):
+        images_to_combine = [d['overlay_image'] for d in st.session_state.processed_images]
+        combined_img = create_combined_grid(images_to_combine, export_cols, padding_px)
+        
+        if combined_img:
+            st.image(combined_img, caption="Preview of Combined Grid", use_container_width=True)
+            
+            buf = io.BytesIO()
+            combined_img.save(buf, format="PNG")
+            st.download_button(
+                label="⬇️ Download Combined Image",
+                data=buf.getvalue(),
+                file_name="combined_grid_iccd.png",
+                mime="image/png",
+                use_container_width=True
+            )
+        else:
+            st.warning("No images to combine.")
+
 else:
     st.markdown("""
     <div style='text-align: center; padding: 4rem; background: rgba(255, 255, 255, 0.1); 
