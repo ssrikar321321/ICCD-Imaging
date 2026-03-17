@@ -371,9 +371,9 @@ with st.sidebar:
         # Added Font Size Adjustment
         timestamp_font_size = st.slider(
             "Text Font Size", 
-            min_value=10, 
+            min_value=1, 
             max_value=100, 
-            value=30, 
+            value=100, 
             help="Adjust the size of the timestamp text on the images"
         )
 
