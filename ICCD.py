@@ -88,10 +88,11 @@ def add_timestamp_overlay(image, text, font_size_param):
     draw = ImageDraw.Draw(overlay)
 
     # Use user provided font size or fallback to dynamic calculation if 0/None
-    if font_size_param > 0:
-        font_size = font_size_param
-    else:
-        font_size = max(16, base.width // 25)
+    # AFTER
+    # font_size_param is a percentage (1–200).
+    # Base size = image_width / 15  (~6.7 % of width), scaled by the slider.
+    base_font = max(16, base.width // 15)
+    font_size = max(10, int(base_font * font_size_param / 100))
     
     try:
         font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", font_size)
@@ -371,9 +372,10 @@ with st.sidebar:
         # Added Font Size Adjustment
         timestamp_font_size = st.slider(
             "Text Font Size", 
-            min_value=1, 
-            max_value=100, 
-            value=100, 
+            min_value=10,
+            max_value=200,
+            value=100,
+            step=5,
             help="Adjust the size of the timestamp text on the images"
         )
 
