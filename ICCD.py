@@ -92,7 +92,7 @@ def add_timestamp_overlay(image, text, font_size_param):
     # font_size_param is a percentage (1–200).
     # Base size = image_width / 15  (~6.7 % of width), scaled by the slider.
     base_font = max(16, base.width // 15)
-    font_size = max(10, int(base_font * font_size_param / 10))
+    font_size = max(100, int(base_font * font_size_param / 100))
     
     try:
         font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", font_size)
