@@ -94,13 +94,17 @@ def add_timestamp_overlay(image, text, font_size_param):
     # AFTER
     font_size = font_size_param
     
+    # AFTER
     try:
         font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", font_size)
     except:
         try:
             font = ImageFont.truetype("arial.ttf", font_size)
         except:
-            font = ImageFont.load_default()
+            try:
+                font = ImageFont.load_default(size=font_size)  # Pillow >= 10.1.0
+            except TypeError:
+                font = ImageFont.load_default()  # fallback for older Pillow
 
     bbox = draw.textbbox((0, 0), text, font=font)
     text_width = bbox[2] - bbox[0]
