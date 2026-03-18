@@ -106,7 +106,7 @@ def add_timestamp_overlay(image, text, font_size_param):
     text_width = bbox[2] - bbox[0]
     text_height = bbox[3] - bbox[1]
 
-    padding = max(8, font_size // 4)
+    padding = 10  # fixed padding, no longer tied to font size
     x = padding
     y = base.height - text_height - padding * 2
 
