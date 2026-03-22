@@ -363,15 +363,24 @@ with st.sidebar:
                 step=1.0,
                 format="%.1f"
             )
+        # Použitie Unicode sekvencie pre stabilitu
+        time_units = ["ns", "\u03bcs", "ms", "s"] 
 
-        time_units = ["ns", "\u03bcs", "ms", "s"]
         current_unit = st.session_state.time_settings['unit']
         try:
             default_index = time_units.index(current_unit)
         except ValueError:
             default_index = 0
-        
+
         time_unit = st.selectbox("Time Unit", options=time_units, index=default_index)
+        #time_units = ["ns", "\u03bcs", "ms", "s"]
+        #current_unit = st.session_state.time_settings['unit']
+        #try:
+            #default_index = time_units.index(current_unit)
+        #except ValueError:
+            #default_index = 0
+        
+        #time_unit = st.selectbox("Time Unit", options=time_units, index=default_index)
 
         # Added Font Size Adjustment
         timestamp_font_size = st.slider(
