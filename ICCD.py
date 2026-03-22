@@ -364,7 +364,7 @@ with st.sidebar:
                 format="%.1f"
             )
         # Použitie Unicode sekvencie pre stabilitu
-        time_units = ["ns", "\u00b5s", "ms", "s"] 
+        time_units = ["ns", "us", "ms", "s"] 
 
         current_unit = st.session_state.time_settings['unit']
         try:
