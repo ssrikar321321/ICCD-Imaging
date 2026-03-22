@@ -364,7 +364,7 @@ with st.sidebar:
                 format="%.1f"
             )
 
-        time_units = ["ns", "µs", "ms", "s"]
+        time_units = ["ns", "$\mus", "ms", "s"]
         current_unit = st.session_state.time_settings['unit']
         try:
             default_index = time_units.index(current_unit)
